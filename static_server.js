@@ -1,7 +1,8 @@
 var http = require("http"),
     url = require("url"),
     path = require("path"),
-    fs = require("fs")
+    fs = require("fs"),
+    timers = require("timers"),
     port = process.argv[2] || 8888;
 
 http.createServer(function(request, response) {
@@ -17,7 +18,7 @@ http.createServer(function(request, response) {
       return;
     }
 
-    var rs = fs.createReadStream(filename);
+    var rs = fs.createReadStream(filename, {bufferSize: 10});
     
     rs.on('error', function(err) {
         response.writeHead(500, {"Content-Type": "text/plain"});
@@ -30,14 +31,16 @@ http.createServer(function(request, response) {
     });
     
     rs.on('data', function(data) {
-        if (!response.write(data)) rs.pause();
+        response.write(data);
+        rs.pause();
+        timers.setTimeout(function() {
+            rs.resume();
+        }, 10);
     });
-    
-    response.on('drain', function() {
-        rs.resume();
+
+    rs.on('end', function() {
+        response.end();
     });
-    
-    rs.on('end', function() {response.end()});
   });
 }).listen(parseInt(port, 10));
 
