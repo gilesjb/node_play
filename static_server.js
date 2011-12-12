@@ -3,6 +3,7 @@ var http = require("http"),
     path = require("path"),
     fs = require("fs"),
     timers = require("timers"),
+    qs = require("querystring"),
     port = process.argv[2] || 8888;
 
 http.createServer(function(request, response) {
@@ -10,7 +11,11 @@ http.createServer(function(request, response) {
     var parsed = url.parse(request.url),
         filename = path.join(process.cwd(), parsed.pathname);
 
-    console.log(parsed);
+    var args = qs.parse(parsed.query, ',', ':');
+    var delays = [];
+    for (var arg in args) {
+        delays.push([arg, parseInt(args[arg]) || 0]);
+    }
 
     path.exists(filename, function(exists) {
         if (!exists) {
@@ -20,7 +25,8 @@ http.createServer(function(request, response) {
             return;
         }
 
-        var rs = fs.createReadStream(filename, {bufferSize: 10});
+        var rs = fs.createReadStream(filename, {bufferSize: 100});
+        var pos = 0;
 
         rs.on('error', function(err) {
             response.writeHead(500, {"Content-Type": "text/plain"});
@@ -29,15 +35,20 @@ http.createServer(function(request, response) {
         });
 
         rs.on('open', function() {
-            response.writeHead(200);
+            response.writeHead(200, {"Content-Type": "text/html"});
         });
 
         rs.on('data', function(data) {
-            response.write(data);
+            var delay = delays.length && delays[0][1];
             rs.pause();
             timers.setTimeout(function() {
+                response.write(data);
+                pos += data.length;
+                if (delays.length && pos > delays[0][0]) {
+                    delays.shift();
+                }
                 rs.resume();
-            }, 10);
+            }, delay);
         });
 
         rs.on('end', function() {
